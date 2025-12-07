@@ -19,7 +19,6 @@ def load_data() -> pd.DataFrame:
     df = df.reset_index(drop=True)
     df.index.name = None
 
-
     # 1) timestamp_utc  -----------------------------------------
     if "timestamp_utc" not in df.columns:
         if "ts_utc_parsed" in df.columns:
@@ -58,49 +57,56 @@ def load_data() -> pd.DataFrame:
 df = load_data()
 
 
-# ---------- Sidebar filters ----------
-
+# =====================================================
+# Sidebar filters (single clean version, with keys)
+# =====================================================
 st.sidebar.header("Filters")
 
-# Metric filter
-metric_options = sorted(df["metric_type"].unique())
-default_metric = [m for m in metric_options if m != "fault"] or metric_options
+# start from full dataframe
+df_filtered = df.copy()
 
+# --- Metric filter ---
+metric_options = sorted(df_filtered["metric_type"].dropna().unique())
 selected_metrics = st.sidebar.multiselect(
     "Metric type(s)",
     options=metric_options,
-    default=default_metric,
+    default=metric_options,
+    key="metric_filter",
 )
+df_filtered = df_filtered[df_filtered["metric_type"].isin(selected_metrics)]
 
-# Device filter
-device_options = sorted(df["device_id"].unique())
+# --- Device filter ---
+device_options = sorted(df_filtered["device_id"].dropna().unique())
 selected_devices = st.sidebar.multiselect(
     "Device(s)",
     options=device_options,
     default=device_options,
+    key="device_filter",
+)
+df_filtered = df_filtered[df_filtered["device_id"].isin(selected_devices)]
+
+# --- Time range slider based on row index ---
+df_filtered = df_filtered.sort_values("timestamp_utc").reset_index(drop=True)
+n_rows = len(df_filtered)
+
+if n_rows <= 1:
+    st.warning("No data available for the selected filters.")
+    st.stop()
+
+start_idx, end_idx = st.sidebar.slider(
+    "Time range (row index)",
+    min_value=0,
+    max_value=n_rows - 1,
+    value=(0, n_rows - 1),
+    key="time_range_slider",
 )
 
-# Time range filter (works for datetime or integer)
-min_ts = df["timestamp_utc"].min()
-max_ts = df["timestamp_utc"].max()
-start_ts, end_ts = st.sidebar.slider(
-    "Time range",
-    min_value=min_ts,
-    max_value=max_ts,
-    value=(min_ts, max_ts),
-)
-
-# Apply filters
-mask = (
-    df["metric_type"].isin(selected_metrics)
-    & df["device_id"].isin(selected_devices)
-    & (df["timestamp_utc"] >= start_ts)
-    & (df["timestamp_utc"] <= end_ts)
-)
-df_filtered = df[mask].copy()
+df_filtered = df_filtered.iloc[start_idx : end_idx + 1]
 
 
-# ---------- Overview header ----------
+# =====================================================
+# Overview header
+# =====================================================
 
 st.title("Greenhouse Sensor EDA Dashboard")
 
@@ -123,7 +129,9 @@ with col3:
     st.metric("Outlier rate", f"{100 * outlier_rate:.2f} %")
 
 
-# ---------- Time-series plot ----------
+# =====================================================
+# Time-series plot
+# =====================================================
 
 st.subheader("Time series (scaled value)")
 
@@ -135,21 +143,20 @@ else:
         options=sorted(df_filtered["metric_type"].unique()),
     )
 
-    df_line = df_filtered[df_filtered["metric_type"] == metric_for_line].sort_values(
-        "timestamp_utc"
-    )
+    df_line = df_filtered[df_filtered["metric_type"] == metric_for_line].copy()
+    df_line = df_line.sort_values("timestamp_utc")
 
     if not df_line.empty:
-        # Only set index if it's not already using timestamp_utc
-        if df_line.index.name != "timestamp_utc" and "timestamp_utc" in df_line.columns:
+        if "timestamp_utc" in df_line.columns:
             df_line = df_line.set_index("timestamp_utc")
-
         st.line_chart(df_line["scaled_value"])
     else:
         st.info("No rows for the selected metric.")
 
 
-# ---------- Distribution / histogram ----------
+# =====================================================
+# Distribution / histogram
+# =====================================================
 
 st.subheader("Distribution of scaled values")
 
@@ -163,22 +170,27 @@ else:
     st.info("No data to show histogram.")
 
 
-# ---------- Outlier rate by metric ----------
+# =====================================================
+# Outlier rate by metric
+# =====================================================
 
 st.subheader("Outlier rate by metric_type")
 
-outlier_mask = df["outlier_type"] != "none"
-metric_summary = (
-    df.assign(is_outlier=outlier_mask)
-      .groupby("metric_type", observed=False)
-      .agg(
-          n_readings=("is_outlier", "size"),
-          n_outliers=("is_outlier", "sum"),
-      )
-)
-metric_summary["outlier_rate"] = (
-    metric_summary["n_outliers"] / metric_summary["n_readings"]
-)
+if not df_filtered.empty:
+    outlier_mask = df_filtered["outlier_type"] != "none"
+    metric_summary = (
+        df_filtered.assign(is_outlier=outlier_mask)
+        .groupby("metric_type", observed=False)
+        .agg(
+            n_readings=("is_outlier", "size"),
+            n_outliers=("is_outlier", "sum"),
+        )
+    )
+    metric_summary["outlier_rate"] = (
+        metric_summary["n_outliers"] / metric_summary["n_readings"]
+    )
 
-st.dataframe(metric_summary)
-st.bar_chart(metric_summary["outlier_rate"])
+    st.dataframe(metric_summary)
+    st.bar_chart(metric_summary["outlier_rate"])
+else:
+    st.info("No data to summarize outliers.")

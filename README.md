@@ -154,5 +154,4 @@ To run the app locally
 ```bash
 cd ~/insy6500/project-group3
 conda activate insy6500
-cd project
 streamlit run streamlit_app.py
