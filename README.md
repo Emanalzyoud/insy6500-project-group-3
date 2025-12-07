@@ -142,16 +142,16 @@ Key findings:
 
 ---
 
-### Streamlit Dashboard
+## Streamlit Dashboard
 
 Alongside the notebook analysis, we built an interactive dashboard using Streamlit
 (`streamlit_app.py`). The dashboard lets us explore the cleaned greenhouse sensor
 data by metric, device, and time range, and visualize time series, distributions,
 and outlier rates.  
 
-To run the app locally:
+To run the app locally
 
-```bash
+cd ~/insy6500/project-group3
 conda activate insy6500
 cd project
 streamlit run streamlit_app.py
