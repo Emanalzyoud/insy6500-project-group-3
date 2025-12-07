@@ -151,20 +151,8 @@ and outlier rates.
 
 To run the app locally
 
+```bash
 cd ~/insy6500/project-group3
 conda activate insy6500
 cd project
 streamlit run streamlit_app.py
-
-## Repository Structure
-
-```text
-.
-├── data/
-│   ├── greenhouse_merged_top_fields.csv
-│   └── greenhouse_timeseries_processed.pkl
-├── project/
-│   ├── insy6500_final_greenhouse.ipynb
-│   └── streamlit_app.py
-├── README.md
-
